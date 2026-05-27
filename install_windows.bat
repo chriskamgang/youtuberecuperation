@@ -13,20 +13,29 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-
 echo [OK] Python detecte
-echo.
 
-:: Installer yt-dlp
+:: Creer environnement virtuel
+echo.
+echo Creation de l'environnement virtuel...
+python -m venv venv
+if %errorlevel% neq 0 (
+    echo [ERREUR] Impossible de creer l'environnement virtuel
+    pause
+    exit /b 1
+)
+echo [OK] Environnement virtuel cree
+
+:: Activer et installer yt-dlp
+echo.
 echo Installation de yt-dlp...
+call venv\Scripts\activate.bat
 pip install yt-dlp
 if %errorlevel% neq 0 (
     echo [ERREUR] Echec installation yt-dlp
     pause
     exit /b 1
 )
-
-echo.
 echo [OK] yt-dlp installe
 
 :: Installer ffmpeg via winget si disponible
