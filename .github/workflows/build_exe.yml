@@ -1,0 +1,55 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dependances
+        run: |
+          pip install yt-dlp pyinstaller
+
+      - name: Creer le fichier EXE
+        run: |
+          pyinstaller --onefile --windowed --name "YouTubeDownloader" --icon=NONE downloader.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YouTubeDownloader-Windows
+          path: dist/YouTubeDownloader.exe
+
+      - name: Creer une release GitHub
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/master'
+        with:
+          tag_name: latest
+          name: "YouTube Downloader - Derniere version"
+          body: |
+            ## Telecharger le logiciel pour Windows
+
+            Clique sur **YouTubeDownloader.exe** ci-dessous pour telecharger.
+
+            ### Installation
+            1. Telecharge `YouTubeDownloader.exe`
+            2. Double-clique pour lancer — aucune installation requise !
+
+            > Pour la meilleure qualite video, installe aussi ffmpeg :
+            > `winget install Gyan.FFmpeg`
+          files: dist/YouTubeDownloader.exe
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
