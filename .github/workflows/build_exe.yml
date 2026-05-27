@@ -28,6 +28,16 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name "YouTubeDownloader" --icon=NONE downloader.py
 
+      - name: Tester le EXE
+        run: |
+          $process = Start-Process -FilePath "dist\YouTubeDownloader.exe" -ArgumentList "--test" -Wait -PassThru -NoNewWindow
+          if ($process.ExitCode -ne 0) {
+            Write-Error "Le EXE a retourne le code d'erreur : $($process.ExitCode)"
+            exit 1
+          }
+          Write-Host "TEST PASSE : le EXE fonctionne correctement"
+        shell: pwsh
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

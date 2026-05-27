@@ -296,4 +296,14 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--test" in sys.argv:
+        # Mode test CI : verifie les imports et quitte proprement
+        import tkinter as tk
+        import yt_dlp
+        import shutil
+        root = tk.Tk()
+        root.withdraw()
+        root.destroy()
+        print("TEST OK : imports et tkinter fonctionnels")
+        sys.exit(0)
     main()
