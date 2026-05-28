@@ -207,10 +207,13 @@ class YouTubeDownloader:
             "outtmpl": out_template,
             "quiet": True,
             "progress_hooks": [self._progress_hook],
-            "retries": 10,
-            "fragment_retries": 10,
-            "socket_timeout": 60,
+            "retries": 15,
+            "fragment_retries": 15,
+            "socket_timeout": 30,
             "http_chunk_size": 1048576,
+            "ignoreerrors": True,   # continue si une video de la playlist echoue
+            "continuedl": True,     # reprend les telechargements interrompus
+            "nooverwrites": True,   # ne re-telecharge pas les videos deja presentes
         }
         if ffmpeg:
             opts["merge_output_format"] = "mp4"
