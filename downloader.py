@@ -35,7 +35,7 @@ class YouTubeDownloader:
         ).pack(pady=(20, 5))
 
         tk.Label(
-            self.root, text="Colle les liens YouTube (un par ligne)",
+            self.root, text="Colle les liens YouTube (videos ou playlistes, un par ligne)",
             font=("Arial", 11), fg="#AABBD0", bg="#1B2A4A"
         ).pack()
 
@@ -151,7 +151,8 @@ class YouTubeDownloader:
         return shutil.which("ffmpeg") is not None
 
     def _get_ydl_opts(self, fmt_key):
-        out_template = os.path.join(self.download_folder, "%(title)s.%(ext)s")
+        # Si c'est une playlist, sauvegarder dans un sous-dossier du nom de la playlist
+        out_template = os.path.join(self.download_folder, "%(playlist_title)s", "%(playlist_index)s - %(title)s.%(ext)s")
         ffmpeg = self._has_ffmpeg()
 
         if fmt_key == "mp3":
@@ -210,7 +211,11 @@ class YouTubeDownloader:
             filename = os.path.basename(d.get("filename", ""))
             percent = d.get("_percent_str", "").strip()
             speed = d.get("_speed_str", "").strip()
-            self.root.after(0, self._log, f"  {filename[:50]}... {percent} ({speed})")
+            # Info playlist si disponible
+            playlist_index = d.get("info_dict", {}).get("playlist_index")
+            playlist_count = d.get("info_dict", {}).get("n_entries")
+            prefix = f"[{playlist_index}/{playlist_count}] " if playlist_index else ""
+            self.root.after(0, self._log, f"  {prefix}{filename[:45]}... {percent} ({speed})")
         elif d["status"] == "finished":
             self.root.after(0, self._log, f"  Termine : {os.path.basename(d['filename'])}")
 
@@ -244,7 +249,11 @@ class YouTubeDownloader:
         errors = 0
 
         for i, url in enumerate(links, 1):
-            self.root.after(0, self._log, f"\n[{i}/{len(links)}] {url}")
+            is_playlist = "playlist" in url or "list=" in url
+            type_label = "PLAYLIST" if is_playlist else "VIDEO"
+            self.root.after(0, self._log, f"\n[{i}/{len(links)}] [{type_label}] {url}")
+            if is_playlist:
+                self.root.after(0, self._log, "  Lecture de la playlist en cours...")
             downloaded_files = []
 
             def hook(d, _files=downloaded_files):
