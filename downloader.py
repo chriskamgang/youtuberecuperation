@@ -9,7 +9,7 @@ try:
 except ImportError:
     messagebox.showerror(
         "Dependance manquante",
-        "yt-dlp n'est pas installe.\n\nExecure cette commande dans le terminal :\n\npip install yt-dlp"
+        "yt-dlp n'est pas installe.\n\nExecute cette commande dans le terminal :\n\npip install yt-dlp"
     )
     sys.exit(1)
 
@@ -24,11 +24,12 @@ class YouTubeDownloader:
 
         self.download_folder = os.path.expanduser("~/Downloads")
         self.is_downloading = False
+        self._stop_event = threading.Event()
+        self._current_ydl = None
 
         self._build_ui()
 
     def _build_ui(self):
-        # Titre
         tk.Label(
             self.root, text="Telecharger Videos YouTube",
             font=("Arial", 18, "bold"), fg="#F5A623", bg="#1B2A4A"
@@ -39,27 +40,24 @@ class YouTubeDownloader:
             font=("Arial", 11), fg="#AABBD0", bg="#1B2A4A"
         ).pack()
 
-        # Zone de texte pour les liens
+        # Zone de texte
         frame_links = tk.Frame(self.root, bg="#1B2A4A")
         frame_links.pack(padx=20, pady=10, fill="both")
 
         self.txt_links = tk.Text(
             frame_links, height=10, font=("Courier", 11),
             bg="#0D1B2E", fg="#FFFFFF", insertbackground="white",
-            relief="flat", bd=0, padx=8, pady=8,
-            wrap="word"
+            relief="flat", bd=0, padx=8, pady=8, wrap="word"
         )
         self.txt_links.pack(fill="both", expand=True)
         self.txt_links.insert("1.0", "https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/watch?v=...")
-
         scrollbar = tk.Scrollbar(frame_links, command=self.txt_links.yview)
         self.txt_links.configure(yscrollcommand=scrollbar.set)
 
-        # Options
+        # Format
         frame_opts = tk.Frame(self.root, bg="#1B2A4A")
         frame_opts.pack(padx=20, pady=5, fill="x")
 
-        # Format
         tk.Label(frame_opts, text="Format :", fg="#AABBD0", bg="#1B2A4A", font=("Arial", 11)).pack(side="left")
         self.format_var = tk.StringVar(value="mp4_best")
         formats = [
@@ -77,7 +75,7 @@ class YouTubeDownloader:
         self.format_combo.pack(side="left", padx=(8, 0))
         self._format_map = {f[0]: f[1] for f in formats}
 
-        # Dossier de destination
+        # Dossier
         frame_dest = tk.Frame(self.root, bg="#1B2A4A")
         frame_dest.pack(padx=20, pady=8, fill="x")
 
@@ -121,6 +119,15 @@ class YouTubeDownloader:
         )
         self.btn_download.pack(side="left", padx=8)
 
+        self.btn_stop = tk.Button(
+            frame_btns, text="  STOP  ",
+            command=self._stop_download,
+            bg="#C0392B", fg="#FFFFFF", font=("Arial", 13, "bold"),
+            relief="flat", padx=20, pady=8, cursor="hand2",
+            state="disabled"
+        )
+        self.btn_stop.pack(side="left", padx=8)
+
         tk.Button(
             frame_btns, text="Effacer",
             command=self._clear,
@@ -134,7 +141,7 @@ class YouTubeDownloader:
             self.download_folder = folder
             self.lbl_folder.config(text=folder)
 
-    def _log(self, message, color="#5EE56E"):
+    def _log(self, message):
         self.txt_log.config(state="normal")
         self.txt_log.insert("end", message + "\n")
         self.txt_log.see("end")
@@ -146,18 +153,22 @@ class YouTubeDownloader:
         self.txt_log.delete("1.0", "end")
         self.txt_log.config(state="disabled")
 
+    def _stop_download(self):
+        if self.is_downloading:
+            self._stop_event.set()
+            self._log("\n  Arret demande... fin de la video en cours.")
+            self.btn_stop.config(state="disabled", text="Arret...")
+
     def _has_ffmpeg(self):
         import shutil
         return shutil.which("ffmpeg") is not None
 
     def _get_ydl_opts(self, fmt_key):
-        # Si c'est une playlist, sauvegarder dans un sous-dossier du nom de la playlist
-        out_template = os.path.join(self.download_folder, "%(playlist_title)s", "%(playlist_index)s - %(title)s.%(ext)s")
+        out_template = os.path.join(self.download_folder, "%(title)s.%(ext)s")
         ffmpeg = self._has_ffmpeg()
 
         if fmt_key == "mp3":
             if not ffmpeg:
-                # Sans ffmpeg : telecharger audio en webm/m4a directement
                 return {
                     "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
                     "outtmpl": out_template,
@@ -177,7 +188,6 @@ class YouTubeDownloader:
             }
 
         if not ffmpeg:
-            # Sans ffmpeg : format pre-fusionne disponible directement
             if fmt_key == "mp4_720":
                 fmt = "best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best"
             elif fmt_key == "mp4_1080":
@@ -207,11 +217,12 @@ class YouTubeDownloader:
         return opts
 
     def _progress_hook(self, d):
+        if self._stop_event.is_set():
+            raise yt_dlp.utils.DownloadCancelled()
         if d["status"] == "downloading":
             filename = os.path.basename(d.get("filename", ""))
             percent = d.get("_percent_str", "").strip()
             speed = d.get("_speed_str", "").strip()
-            # Info playlist si disponible
             playlist_index = d.get("info_dict", {}).get("playlist_index")
             playlist_count = d.get("info_dict", {}).get("n_entries")
             prefix = f"[{playlist_index}/{playlist_count}] " if playlist_index else ""
@@ -233,10 +244,12 @@ class YouTubeDownloader:
         fmt_label = self.format_var.get()
         fmt_key = self._format_map[fmt_label]
 
+        self._stop_event.clear()
         self.is_downloading = True
         self.btn_download.config(state="disabled", text="Telechargement...")
+        self.btn_stop.config(state="normal", text="  STOP  ")
         self.progress.start(10)
-        self._log(f"Debut du telechargement de {len(links)} video(s)...")
+        self._log(f"Debut du telechargement de {len(links)} lien(s)...")
         self._log(f"Format : {fmt_label}")
         self._log(f"Dossier : {self.download_folder}")
         self._log("-" * 60)
@@ -249,11 +262,16 @@ class YouTubeDownloader:
         errors = 0
 
         for i, url in enumerate(links, 1):
+            if self._stop_event.is_set():
+                self.root.after(0, self._log, "\n  Telechargement arrete par l'utilisateur.")
+                break
+
             is_playlist = "playlist" in url or "list=" in url
             type_label = "PLAYLIST" if is_playlist else "VIDEO"
             self.root.after(0, self._log, f"\n[{i}/{len(links)}] [{type_label}] {url}")
             if is_playlist:
                 self.root.after(0, self._log, "  Lecture de la playlist en cours...")
+
             downloaded_files = []
 
             def hook(d, _files=downloaded_files):
@@ -262,19 +280,29 @@ class YouTubeDownloader:
                 self._progress_hook(d)
 
             opts = self._get_ydl_opts(fmt_key)
+            if is_playlist:
+                opts["outtmpl"] = os.path.join(
+                    self.download_folder,
+                    "%(playlist_title)s",
+                    "%(playlist_index)02d - %(title)s.%(ext)s"
+                )
             opts["progress_hooks"] = [hook]
 
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
+                    self._current_ydl = ydl
                     ret = ydl.download([url])
-                # ret == 0 => succes, ou fichier bien telecharge
+                self._current_ydl = None
                 if ret == 0 or downloaded_files:
                     success += 1
                 else:
                     errors += 1
+            except yt_dlp.utils.DownloadCancelled:
+                self.root.after(0, self._log, "  Arrete.")
+                break
             except Exception as e:
+                self._current_ydl = None
                 err_msg = str(e)[:120]
-                # Si un fichier a quand meme ete telecharge, on compte comme succes
                 if downloaded_files:
                     self.root.after(0, self._log, f"  Avertissement : {err_msg}")
                     success += 1
@@ -287,15 +315,18 @@ class YouTubeDownloader:
     def _download_done(self, success, errors):
         self.progress.stop()
         self.is_downloading = False
+        self._current_ydl = None
         self.btn_download.config(state="normal", text="  TELECHARGER  ")
+        self.btn_stop.config(state="disabled", text="  STOP  ")
         self._log("\n" + "=" * 60)
         self._log(f"TERMINE : {success} succes, {errors} erreur(s)")
         self._log(f"Dossier : {self.download_folder}")
 
-        if errors == 0:
-            messagebox.showinfo("Termine !", f"{success} video(s) telechargee(s) avec succes !")
-        else:
-            messagebox.showwarning("Termine avec erreurs", f"{success} succes, {errors} echec(s).\nVoir le log pour les details.")
+        if not self._stop_event.is_set():
+            if errors == 0:
+                messagebox.showinfo("Termine !", f"{success} video(s) telechargee(s) avec succes !")
+            else:
+                messagebox.showwarning("Termine avec erreurs", f"{success} succes, {errors} echec(s).\nVoir le log pour les details.")
 
 
 def main():
@@ -306,10 +337,8 @@ def main():
 
 if __name__ == "__main__":
     if "--test" in sys.argv:
-        # Mode test CI : verifie les imports et quitte proprement
         import tkinter as tk
         import yt_dlp
-        import shutil
         root = tk.Tk()
         root.withdraw()
         root.destroy()

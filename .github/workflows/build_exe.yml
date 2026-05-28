@@ -26,11 +26,13 @@ jobs:
 
       - name: Creer le fichier EXE
         run: |
-          pyinstaller --onefile --windowed --name "YouTubeDownloader" --icon=NONE downloader.py
+          pyinstaller --onedir --windowed --name "YouTubeDownloader" downloader.py
+          Compress-Archive -Path dist/YouTubeDownloader -DestinationPath dist/YouTubeDownloader-Windows.zip
+        shell: pwsh
 
       - name: Tester le EXE
         run: |
-          $process = Start-Process -FilePath "dist\YouTubeDownloader.exe" -ArgumentList "--test" -Wait -PassThru -NoNewWindow
+          $process = Start-Process -FilePath "dist\YouTubeDownloader\YouTubeDownloader.exe" -ArgumentList "--test" -Wait -PassThru -NoNewWindow
           if ($process.ExitCode -ne 0) {
             Write-Error "Le EXE a retourne le code d'erreur : $($process.ExitCode)"
             exit 1
@@ -42,7 +44,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: YouTubeDownloader-Windows
-          path: dist/YouTubeDownloader.exe
+          path: dist/YouTubeDownloader-Windows.zip
 
       - name: Creer une release GitHub
         uses: softprops/action-gh-release@v2
@@ -53,15 +55,17 @@ jobs:
           body: |
             ## Telecharger le logiciel pour Windows
 
-            Clique sur **YouTubeDownloader.exe** ci-dessous pour telecharger.
+            Clique sur **YouTubeDownloader-Windows.zip** ci-dessous pour telecharger.
 
             ### Installation
-            1. Telecharge `YouTubeDownloader.exe`
-            2. Double-clique pour lancer — aucune installation requise !
+            1. Telecharge et extrais `YouTubeDownloader-Windows.zip`
+            2. Ouvre le dossier `YouTubeDownloader`
+            3. Double-clique sur `YouTubeDownloader.exe` pour lancer
 
+            > Demarrage rapide (pas de chargement a chaque lancement)
             > Pour la meilleure qualite video, installe aussi ffmpeg :
             > `winget install Gyan.FFmpeg`
-          files: dist/YouTubeDownloader.exe
+          files: dist/YouTubeDownloader-Windows.zip
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
