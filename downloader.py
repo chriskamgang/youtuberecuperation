@@ -18,7 +18,7 @@ class YouTubeDownloader:
     def __init__(self, root):
         self.root = root
         self.root.title("Telecharger Videos YouTube")
-        self.root.geometry("720x650")
+        self.root.geometry("720x680")
         self.root.resizable(False, False)
         self.root.configure(bg="#1B2A4A")
 
@@ -92,41 +92,65 @@ class YouTubeDownloader:
             relief="flat", padx=10, cursor="hand2"
         ).pack(side="left")
 
-        # Options anti-blocage
-        frame_antiban = tk.Frame(self.root, bg="#1B2A4A")
-        frame_antiban.pack(padx=20, pady=(0, 4), fill="x")
+        # Options anti-blocage - ligne 1 : mode preset
+        frame_antiban1 = tk.Frame(self.root, bg="#1B2A4A")
+        frame_antiban1.pack(padx=20, pady=(0, 2), fill="x")
 
-        tk.Label(frame_antiban, text="Anti-blocage :", fg="#F5A623", bg="#1B2A4A",
+        tk.Label(frame_antiban1, text="Anti-blocage :", fg="#F5A623", bg="#1B2A4A",
                  font=("Arial", 10, "bold")).pack(side="left")
 
-        tk.Label(frame_antiban, text="  Delai vidéos :", fg="#AABBD0", bg="#1B2A4A",
+        self._presets = {
+            "Normal (pas de blocage)":         {"delay": 2,  "cookies": False, "batch": 5,  "pause": 30},
+            "Blocage leger (erreur 429)":       {"delay": 5,  "cookies": False, "batch": 5,  "pause": 30},
+            "Blocage fort (verification bot)":  {"delay": 8,  "cookies": True,  "batch": 3,  "pause": 60},
+            "Beaucoup de playlists (14+)":      {"delay": 5,  "cookies": False, "batch": 3,  "pause": 60},
+            "Personnalise":                     None,
+        }
+        self.preset_var = tk.StringVar(value="Normal (pas de blocage)")
+        preset_combo = ttk.Combobox(
+            frame_antiban1, textvariable=self.preset_var, state="readonly",
+            width=32, font=("Arial", 10)
+        )
+        preset_combo["values"] = list(self._presets.keys())
+        preset_combo.pack(side="left", padx=(8, 0))
+        preset_combo.bind("<<ComboboxSelected>>", self._apply_preset)
+
+        # Options anti-blocage - ligne 2 : reglages manuels
+        frame_antiban2 = tk.Frame(self.root, bg="#1B2A4A")
+        frame_antiban2.pack(padx=20, pady=(0, 4), fill="x")
+
+        tk.Label(frame_antiban2, text="  Delai vidéos :", fg="#AABBD0", bg="#1B2A4A",
                  font=("Arial", 10)).pack(side="left")
         self.delay_var = tk.IntVar(value=2)
-        tk.Spinbox(frame_antiban, from_=0, to=15, textvariable=self.delay_var, width=3,
+        tk.Spinbox(frame_antiban2, from_=0, to=15, textvariable=self.delay_var, width=3,
                    font=("Arial", 10), bg="#0D1B2E", fg="#FFFFFF",
-                   buttonbackground="#2E4070").pack(side="left")
-        tk.Label(frame_antiban, text="s", fg="#AABBD0", bg="#1B2A4A",
+                   buttonbackground="#2E4070",
+                   command=self._on_manual_change).pack(side="left")
+        tk.Label(frame_antiban2, text="s", fg="#AABBD0", bg="#1B2A4A",
                  font=("Arial", 10)).pack(side="left", padx=(2, 12))
 
         self.cookies_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(frame_antiban, text="Cookies Chrome", variable=self.cookies_var,
+        self.cookies_var.trace_add("write", lambda *_: self._on_manual_change())
+        tk.Checkbutton(frame_antiban2, text="Cookies Chrome", variable=self.cookies_var,
                        fg="#AABBD0", bg="#1B2A4A", selectcolor="#0D1B2E",
                        activebackground="#1B2A4A", activeforeground="#FFFFFF",
                        font=("Arial", 10)).pack(side="left", padx=(0, 12))
 
-        tk.Label(frame_antiban, text="Pause longue toutes les", fg="#AABBD0", bg="#1B2A4A",
+        tk.Label(frame_antiban2, text="Pause longue toutes les", fg="#AABBD0", bg="#1B2A4A",
                  font=("Arial", 10)).pack(side="left")
         self.batch_size_var = tk.IntVar(value=5)
-        tk.Spinbox(frame_antiban, from_=1, to=50, textvariable=self.batch_size_var, width=3,
+        tk.Spinbox(frame_antiban2, from_=1, to=50, textvariable=self.batch_size_var, width=3,
                    font=("Arial", 10), bg="#0D1B2E", fg="#FFFFFF",
-                   buttonbackground="#2E4070").pack(side="left", padx=(4, 2))
-        tk.Label(frame_antiban, text="playlists (", fg="#AABBD0", bg="#1B2A4A",
+                   buttonbackground="#2E4070",
+                   command=self._on_manual_change).pack(side="left", padx=(4, 2))
+        tk.Label(frame_antiban2, text="playlists (", fg="#AABBD0", bg="#1B2A4A",
                  font=("Arial", 10)).pack(side="left")
         self.batch_pause_var = tk.IntVar(value=30)
-        tk.Spinbox(frame_antiban, from_=5, to=300, textvariable=self.batch_pause_var, width=4,
+        tk.Spinbox(frame_antiban2, from_=5, to=300, textvariable=self.batch_pause_var, width=4,
                    font=("Arial", 10), bg="#0D1B2E", fg="#FFFFFF",
-                   buttonbackground="#2E4070").pack(side="left", padx=(2, 2))
-        tk.Label(frame_antiban, text="s)", fg="#AABBD0", bg="#1B2A4A",
+                   buttonbackground="#2E4070",
+                   command=self._on_manual_change).pack(side="left", padx=(2, 2))
+        tk.Label(frame_antiban2, text="s)", fg="#AABBD0", bg="#1B2A4A",
                  font=("Arial", 10)).pack(side="left")
 
         # Barre de progression
@@ -171,6 +195,17 @@ class YouTubeDownloader:
             bg="#2E4070", fg="#FFFFFF", font=("Arial", 11),
             relief="flat", padx=16, pady=8, cursor="hand2"
         ).pack(side="left", padx=8)
+
+    def _apply_preset(self, event=None):
+        preset = self._presets.get(self.preset_var.get())
+        if preset:
+            self.delay_var.set(preset["delay"])
+            self.cookies_var.set(preset["cookies"])
+            self.batch_size_var.set(preset["batch"])
+            self.batch_pause_var.set(preset["pause"])
+
+    def _on_manual_change(self):
+        self.preset_var.set("Personnalise")
 
     def _choose_folder(self):
         folder = filedialog.askdirectory(initialdir=self.download_folder)
