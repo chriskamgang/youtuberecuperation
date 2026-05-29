@@ -219,6 +219,23 @@ class YouTubeDownloader:
             opts["merge_output_format"] = "mp4"
         return opts
 
+    def _make_logger(self):
+        log_fn = self._log
+
+        class YDLLogger:
+            def debug(self, msg):
+                pass
+            def info(self, msg):
+                pass
+            def warning(self, msg):
+                if msg:
+                    log_fn(f"  Avertissement : {str(msg)[:120]}")
+            def error(self, msg):
+                if msg:
+                    log_fn(f"  ERREUR yt-dlp : {str(msg)[:120]}")
+
+        return YDLLogger()
+
     def _progress_hook(self, d):
         if self._stop_event.is_set():
             raise yt_dlp.utils.DownloadCancelled()
@@ -278,7 +295,7 @@ class YouTubeDownloader:
             downloaded_files = []
 
             def hook(d, _files=downloaded_files):
-                if d["status"] == "finished":
+                if d["status"] in ("finished", "already_downloaded"):
                     _files.append(d.get("filename", ""))
                 self._progress_hook(d)
 
@@ -289,7 +306,11 @@ class YouTubeDownloader:
                     "%(playlist_title)s",
                     "%(playlist_index)02d - %(title)s.%(ext)s"
                 )
+                opts["yes_playlist"] = True
+                opts["sleep_interval"] = 2
+                opts["sleep_interval_requests"] = 1
             opts["progress_hooks"] = [hook]
+            opts["logger"] = self._make_logger()
 
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
@@ -312,6 +333,11 @@ class YouTubeDownloader:
                 else:
                     self.root.after(0, self._log, f"  ERREUR : {err_msg}")
                     errors += 1
+
+            # Pause entre les liens pour eviter le blocage YouTube
+            if not self._stop_event.is_set() and i < len(links):
+                import time
+                time.sleep(3)
 
         self.root.after(0, self._download_done, success, errors)
 
