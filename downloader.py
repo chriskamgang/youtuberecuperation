@@ -18,7 +18,7 @@ class YouTubeDownloader:
     def __init__(self, root):
         self.root = root
         self.root.title("Telecharger Videos YouTube")
-        self.root.geometry("720x580")
+        self.root.geometry("720x650")
         self.root.resizable(False, False)
         self.root.configure(bg="#1B2A4A")
 
@@ -91,6 +91,43 @@ class YouTubeDownloader:
             bg="#F5A623", fg="#1B2A4A", font=("Arial", 10, "bold"),
             relief="flat", padx=10, cursor="hand2"
         ).pack(side="left")
+
+        # Options anti-blocage
+        frame_antiban = tk.Frame(self.root, bg="#1B2A4A")
+        frame_antiban.pack(padx=20, pady=(0, 4), fill="x")
+
+        tk.Label(frame_antiban, text="Anti-blocage :", fg="#F5A623", bg="#1B2A4A",
+                 font=("Arial", 10, "bold")).pack(side="left")
+
+        tk.Label(frame_antiban, text="  Delai vidéos :", fg="#AABBD0", bg="#1B2A4A",
+                 font=("Arial", 10)).pack(side="left")
+        self.delay_var = tk.IntVar(value=2)
+        tk.Spinbox(frame_antiban, from_=0, to=15, textvariable=self.delay_var, width=3,
+                   font=("Arial", 10), bg="#0D1B2E", fg="#FFFFFF",
+                   buttonbackground="#2E4070").pack(side="left")
+        tk.Label(frame_antiban, text="s", fg="#AABBD0", bg="#1B2A4A",
+                 font=("Arial", 10)).pack(side="left", padx=(2, 12))
+
+        self.cookies_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(frame_antiban, text="Cookies Chrome", variable=self.cookies_var,
+                       fg="#AABBD0", bg="#1B2A4A", selectcolor="#0D1B2E",
+                       activebackground="#1B2A4A", activeforeground="#FFFFFF",
+                       font=("Arial", 10)).pack(side="left", padx=(0, 12))
+
+        tk.Label(frame_antiban, text="Pause longue toutes les", fg="#AABBD0", bg="#1B2A4A",
+                 font=("Arial", 10)).pack(side="left")
+        self.batch_size_var = tk.IntVar(value=5)
+        tk.Spinbox(frame_antiban, from_=1, to=50, textvariable=self.batch_size_var, width=3,
+                   font=("Arial", 10), bg="#0D1B2E", fg="#FFFFFF",
+                   buttonbackground="#2E4070").pack(side="left", padx=(4, 2))
+        tk.Label(frame_antiban, text="playlists (", fg="#AABBD0", bg="#1B2A4A",
+                 font=("Arial", 10)).pack(side="left")
+        self.batch_pause_var = tk.IntVar(value=30)
+        tk.Spinbox(frame_antiban, from_=5, to=300, textvariable=self.batch_pause_var, width=4,
+                   font=("Arial", 10), bg="#0D1B2E", fg="#FFFFFF",
+                   buttonbackground="#2E4070").pack(side="left", padx=(2, 2))
+        tk.Label(frame_antiban, text="s)", fg="#AABBD0", bg="#1B2A4A",
+                 font=("Arial", 10)).pack(side="left")
 
         # Barre de progression
         self.progress = ttk.Progressbar(self.root, mode="indeterminate", length=680)
@@ -269,17 +306,21 @@ class YouTubeDownloader:
         self.btn_download.config(state="disabled", text="Telechargement...")
         self.btn_stop.config(state="normal", text="  STOP  ")
         self.progress.start(10)
+        cookies_info = "Chrome" if self.cookies_var.get() else "Non"
         self._log(f"Debut du telechargement de {len(links)} lien(s)...")
         self._log(f"Format : {fmt_label}")
         self._log(f"Dossier : {self.download_folder}")
+        self._log(f"Delai : {self.delay_var.get()}s | Cookies : {cookies_info} | Pause longue : toutes les {self.batch_size_var.get()} playlists ({self.batch_pause_var.get()}s)")
         self._log("-" * 60)
 
         thread = threading.Thread(target=self._download_all, args=(links, fmt_key), daemon=True)
         thread.start()
 
     def _download_all(self, links, fmt_key):
+        import time
         success = 0
         errors = 0
+        playlist_count = 0
 
         for i, url in enumerate(links, 1):
             if self._stop_event.is_set():
@@ -307,8 +348,10 @@ class YouTubeDownloader:
                     "%(playlist_index)02d - %(title)s.%(ext)s"
                 )
                 opts["yes_playlist"] = True
-                opts["sleep_interval"] = 2
-                opts["sleep_interval_requests"] = 1
+                opts["sleep_interval"] = self.delay_var.get()
+                opts["sleep_interval_requests"] = max(1, self.delay_var.get() // 2)
+            if self.cookies_var.get():
+                opts["cookiesfrombrowser"] = ("chrome",)
             opts["progress_hooks"] = [hook]
             opts["logger"] = self._make_logger()
 
@@ -334,9 +377,18 @@ class YouTubeDownloader:
                     self.root.after(0, self._log, f"  ERREUR : {err_msg}")
                     errors += 1
 
-            # Pause entre les liens pour eviter le blocage YouTube
+            # Compteur de playlists pour la pause longue
+            if is_playlist:
+                playlist_count += 1
+                batch_size = self.batch_size_var.get()
+                batch_pause = self.batch_pause_var.get()
+                if playlist_count % batch_size == 0 and not self._stop_event.is_set() and i < len(links):
+                    self.root.after(0, self._log, f"\n  Pause longue de {batch_pause}s apres {batch_size} playlists...")
+                    time.sleep(batch_pause)
+                    continue
+
+            # Pause courte entre les liens pour eviter le blocage YouTube
             if not self._stop_event.is_set() and i < len(links):
-                import time
                 time.sleep(3)
 
         self.root.after(0, self._download_done, success, errors)
